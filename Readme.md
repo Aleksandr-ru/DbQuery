@@ -18,5 +18,7 @@ $DB->queryColumn($sql, $min_id, $max_id); // first column (first and second, dep
 ```
 
 ## Supported databases
+
 **MySQL** via mysqli
+
 **SQLte** via sqlite3
