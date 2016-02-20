@@ -4,6 +4,8 @@
  * @copyright (c)Rebel http://aleksandr.ru
  * @version 0.1 aplha
  * 
+ * В основу положена концепция из ora_query() by alyuro
+ * 
  * информация о версиях
  * 1.0 
  */
