@@ -2,7 +2,7 @@
 /**
  * Класс работы с Oracle
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.1 aplha
+ * @version 0.2 pre-beta
  * 
  * В основу положена концепция из ora_query() by alyuro
  * 
@@ -19,6 +19,7 @@ class OracleQuery
 	const VARCLASS_BLOB = 'blob';
 	const VARCLASS_CLOB = 'clob';
 	const BIND_MAXLENGTH = 255;	
+	const SCHEMA_REGEXP = '/^[a-z]+[a-z0-9_]*$/i';
 	
 	protected $conn, $e;
 	protected $lob, $curs;
@@ -48,8 +49,13 @@ class OracleQuery
 		elseif($this->e['code']) {
 			trigger_error("Connection was successful, but {$this->e['message']}", E_USER_WARNING);
 		}
-		
-		if($schema) $this->execQuery("ALTER SESSION SET CURRENT_SCHEMA = :SCHEMA", $schema);		
+				
+		if(preg_match(self::SCHEMA_REGEXP, $schema)) {
+			$this->execQuery("ALTER SESSION SET CURRENT_SCHEMA = $schema");
+		}
+		elseif($schema) {
+			trigger_error("Bad schema name '$schema' ignored", E_USER_WARNING);
+		}
 	}
 	
 	/**
@@ -72,11 +78,11 @@ class OracleQuery
 	
 	protected function freeLobCurs()
 	{
-		foreach ($this->lob as $key => $value) {
+		if(isset($this->lob)) foreach ($this->lob as $key => $value) {
 			@oci_free_descriptor($value);
 			unset($this->lob[$key]);
 		}
-		foreach ($this->curs as $key => $value) {
+		if(isset($this->curs)) foreach ($this->curs as $key => $value) {
 			@oci_free_statement($value);
 			unset($this->curs[$key]);
 		}
@@ -141,7 +147,7 @@ class OracleQuery
 	protected function makeBind($stmt, $var, &$arg, $vartype, $varclass)
 	{
 		// regular in
-		if ($vartype == self::VARTYPE_IN && !$varclass) {
+		if ($vartype == self::VARTYPE_IN && !$varclass) {			
 			return oci_bind_by_name($stmt, $var, $arg);
 		}
 		// regular out
@@ -206,7 +212,7 @@ class OracleQuery
 		for($i=0; $i<$paramcount; $i++) if(!$this->makeBind($stmt, $variables[3][$i], $args[$i], $variables[1][$i], $variables[2][$i])) {
 			$this->e = oci_error($stmt);
 			oci_free_statement($stmt);
-			trigger_error("Failed to make bind for '{$variables[1][$i]}'", E_USER_WARNING);
+			trigger_error("Failed to make bind for '{$variables[3][$i]}' [$sql]", E_USER_WARNING);
 			$this->freeLobCurs();
 			return FALSE;	
 		}
@@ -216,6 +222,7 @@ class OracleQuery
 			$this->e = oci_error($stmt);
 			oci_free_statement($stmt);
 			$this->freeLobCurs();
+			trigger_error("Execute failed for query [$sql]", E_USER_WARNING);
 			return FALSE;
 		}
 		
@@ -267,21 +274,31 @@ class OracleQuery
 	* @return resource 	
 	*/
 	protected function stmtWithBind($sql)
-	{
+	{		
 		$variables = $this->parseQuery($sql);
-		if(FALSE === $variables) return FALSE;
+		if(FALSE === $variables) return FALSE;		
 		
 		$paramcount = sizeof($variables[0]);
 		if($paramcount > func_num_args() - 1) {							
 			throw new BadMethodCallException("Too less arguments for query [$sql]");
 		}
 		
+		$stmt = oci_parse($this->conn, $sql);
+		$this->e = oci_error($stmt);
+		if(!$stmt) {
+			trigger_error("Failed to parse sql [$sql]", E_USER_WARNING);
+			return FALSE;
+		}
+		
 		// make binds
-		for($i=0; $i<$paramcount; $i++) if(!$this->makeBind($stmt, $variables[3][$i], func_get_arg($i+1), $variables[1][$i], $variables[2][$i])) {
-			$this->e = oci_error($stmt);
-			oci_free_statement($stmt);
-			trigger_error("Failed to make bind for '{$variables[1][$i]}'", E_USER_WARNING);
-			return FALSE;	
+		for($i=0; $i<$paramcount; $i++) {
+			$arg = func_get_arg($i+1);			
+			if(!$this->makeBind($stmt, $variables[3][$i], $arg, $variables[1][$i], $variables[2][$i])) {
+				$this->e = oci_error($stmt);
+				oci_free_statement($stmt);
+				trigger_error("Failed to make bind for '{$variables[3][$i]}' [$sql]", E_USER_WARNING);
+				return FALSE;	
+			}
 		}
 		
 		return $stmt;
@@ -297,7 +314,7 @@ class OracleQuery
 	* @return bool	
 	*/
 	function execQuery($sql)
-	{
+	{		
 		$stmt = call_user_func_array(array($this, 'stmtWithBind'), func_get_args());
 		if(!$stmt) {
 			return FALSE;
@@ -307,6 +324,7 @@ class OracleQuery
 		if(!oci_execute($stmt, OCI_DEFAULT)) {
 			$this->e = oci_error($stmt);
 			oci_free_statement($stmt);
+			trigger_error("Execute failed for query [$sql]", E_USER_WARNING);
 			return FALSE;
 		}		
 		oci_free_statement($stmt);
@@ -333,6 +351,7 @@ class OracleQuery
 		if(!oci_execute($stmt, OCI_DEFAULT)) {
 			$this->e = oci_error($stmt);
 			oci_free_statement($stmt);
+			trigger_error("Execute failed for query [$sql]", E_USER_WARNING);
 			return FALSE;
 		}
 		
