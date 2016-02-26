@@ -68,6 +68,15 @@ class OracleQuery
 	}
 	
 	/**
+	 * получить последний код ошибки
+	 * @return int
+	 */
+	function getErrorCode()
+	{
+		return isset($this->e['code']) && $this->e['code'] ? $this->e['code'] : FALSE;
+	}
+	
+	/**
 	 * получить последнее сообщение об ошибке
 	 * @return string
 	 */
