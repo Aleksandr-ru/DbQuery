@@ -41,8 +41,10 @@ class OracleQuery
 		else {
 			$charset = null;
 		}
+		
 		$this->conn = oci_connect($username, $password, $db, $charset);
-		$this->e = oci_error($this->conn);
+		$this->e = oci_error();
+		
 		if(!$this->conn) {
 			throw new Exception($this->e['message'], $this->e['code']);			
 		}
