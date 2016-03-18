@@ -44,7 +44,7 @@ class OracleQuery
 		$this->conn = oci_connect($username, $password, $db, $charset);
 		$this->e = oci_error($this->conn);
 		if(!$this->conn) {
-			throw new Exception($this->e['message']);			
+			throw new Exception($this->e['message'], $this->e['code']);			
 		}
 		elseif($this->e['code']) {
 			trigger_error("Connection was successful, but {$this->e['message']}", E_USER_WARNING);
