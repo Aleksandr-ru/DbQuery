@@ -255,7 +255,7 @@ class OracleQuery
 					$this->e = oci_error($this->curs[$var]);
 					trigger_error("Cursor '$var' execution error: ".$this->getErrorMes(), E_USER_WARNING);
 				}	 
-				else oci_fetch_all($stmt, $ret[$var], 0, -1, OCI_FETCHSTATEMENT_BY_ROW + $this->fetch_mode);
+				else oci_fetch_all($this->curs[$var], $ret[$var], 0, -1, OCI_FETCHSTATEMENT_BY_ROW + $this->fetch_mode);
 				oci_free_statement($this->curs[$var]);						
 			}
 			// blob and clob in and out
