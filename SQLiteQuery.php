@@ -164,7 +164,7 @@ class SQLiteQuery extends SQLite3
 		}		
 		$result->finalize();
 		$stmt->close();				
-		return sizeof($ret) ? $ret : FALSE;
+		return $ret;
 	}
 	
 	/**
