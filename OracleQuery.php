@@ -176,12 +176,12 @@ class OracleQuery
 		elseif ($vartype == self::VARTYPE_IN && ($varclass == self::VARCLASS_BLOB || $varclass == self::VARCLASS_CLOB)) {
 			$this->lob[$var] = oci_new_descriptor($this->conn, OCI_D_LOB);
 			$this->lob[$var]->writeTemporary($arg, $varclass == self::VARCLASS_BLOB ? OCI_TEMP_BLOB : OCI_TEMP_CLOB);
-			return oci_bind_by_name($stmt, $var, $lob[$var], -1, $varclass == self::VARCLASS_BLOB ? OCI_B_BLOB : OCI_B_CLOB);
+			return oci_bind_by_name($stmt, $var, $this->lob[$var], -1, $varclass == self::VARCLASS_BLOB ? OCI_B_BLOB : OCI_B_CLOB);
 		}
 		// blob and clob out
 		elseif ($vartype == self::VARTYPE_OUT && ($varclass == self::VARCLASS_BLOB || $varclass == self::VARCLASS_CLOB)) {
 			$this->lob[$var] = oci_new_descriptor($this->conn, OCI_D_LOB);				
-			return oci_bind_by_name($stmt, $var, $lob[$var], -1, $varclass == self::VARCLASS_BLOB ? OCI_B_BLOB : OCI_B_CLOB);
+			return oci_bind_by_name($stmt, $var, $this->lob[$var], -1, $varclass == self::VARCLASS_BLOB ? OCI_B_BLOB : OCI_B_CLOB);
 		}
 		// wrong
 		else {
