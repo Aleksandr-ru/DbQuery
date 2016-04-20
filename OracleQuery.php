@@ -2,7 +2,7 @@
 /**
  * Класс работы с Oracle
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.2 pre-beta
+ * @version 0.3 pre-beta
  * 
  * В основу положена концепция из ora_query() by alyuro
  * 
@@ -175,8 +175,14 @@ class OracleQuery
 		// blob and clob in
 		elseif ($vartype == self::VARTYPE_IN && ($varclass == self::VARCLASS_BLOB || $varclass == self::VARCLASS_CLOB)) {
 			$this->lob[$var] = oci_new_descriptor($this->conn, OCI_D_LOB);
-			$this->lob[$var]->writeTemporary($arg, $varclass == self::VARCLASS_BLOB ? OCI_TEMP_BLOB : OCI_TEMP_CLOB);
-			return oci_bind_by_name($stmt, $var, $this->lob[$var], -1, $varclass == self::VARCLASS_BLOB ? OCI_B_BLOB : OCI_B_CLOB);
+			if(method_exists($this->lob[$var], 'writeTemporary')) {
+				$this->lob[$var]->writeTemporary($arg, $varclass == self::VARCLASS_BLOB ? OCI_TEMP_BLOB : OCI_TEMP_CLOB);
+				return oci_bind_by_name($stmt, $var, $this->lob[$var], -1, $varclass == self::VARCLASS_BLOB ? OCI_B_BLOB : OCI_B_CLOB);
+			}
+			else {
+				trigger_error("Method 'writeTemporary' does not exists for '$var'. OCI-Lob is '" . print_r($this->lob[$var], TRUE)."'", E_USER_WARNING);
+				return FALSE;
+			}
 		}
 		// blob and clob out
 		elseif ($vartype == self::VARTYPE_OUT && ($varclass == self::VARCLASS_BLOB || $varclass == self::VARCLASS_CLOB)) {
@@ -261,10 +267,20 @@ class OracleQuery
 			// blob and clob in and out
 			elseif ($varclass == self::VARCLASS_BLOB || $varclass == self::VARCLASS_CLOB) {
 				if($vartype == self::VARTYPE_IN) {
-					$this->lob[$var]->flush(OCI_LOB_BUFFER_FREE);
+					if(method_exists($this->lob[$var], 'flush')) {
+						$this->lob[$var]->flush(OCI_LOB_BUFFER_FREE);
+					}
+					else {					
+						trigger_error("Method 'flush' does not exists for '$var'. OCI-Lob is '" . print_r($this->lob[$var], TRUE)."'", E_USER_WARNING);
+					}
 				}
 				else { // $vartype == self::VARTYPE_OUT
-					$ret[$var] = $this->lob[$var]->load();
+					if(method_exists($this->lob[$var], 'load')) {
+						$ret[$var] = $this->lob[$var]->load();
+					}
+					else {					
+						trigger_error("Method 'load' does not exists for '$var'. OCI-Lob is '" . print_r($this->lob[$var], TRUE)."'", E_USER_WARNING);
+					}
 				}
 				oci_free_descriptor($this->lob[$var]); 
 			}			
