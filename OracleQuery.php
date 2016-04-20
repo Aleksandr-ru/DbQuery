@@ -275,7 +275,12 @@ class OracleQuery
 					}
 				}
 				else { // $vartype == self::VARTYPE_OUT
-					if(method_exists($this->lob[$var], 'load')) {
+					if(is_null($this->lob[$var])) {
+						// Yep! Out Lob can be NULL o_0
+						$ret[$var] = NULL;
+					}
+					elseif(method_exists($this->lob[$var], 'load')) {
+						// Lob is not NULL and data can be fetched
 						$ret[$var] = $this->lob[$var]->load();
 					}
 					else {					
