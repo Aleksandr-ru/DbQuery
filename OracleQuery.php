@@ -287,7 +287,7 @@ class OracleQuery
 						trigger_error("Method 'load' does not exists for '$var'. OCI-Lob is '" . print_r($this->lob[$var], TRUE)."'", E_USER_WARNING);
 					}
 				}
-				oci_free_descriptor($this->lob[$var]); 
+				if($this->lob[$var]) oci_free_descriptor($this->lob[$var]); 
 			}			
 		}
 		
