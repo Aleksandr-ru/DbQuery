@@ -186,7 +186,7 @@ class SQLiteQuery extends SQLite3
 	function queryValue($sql)
 	{
 		$ret = call_user_func_array(array($this, 'queryRow'), func_get_args());
-		if(is_array($ret) && sizeof($ret)) return array_shift($ret);
+		if(is_array($ret) /*&& sizeof($ret)*/) return array_shift($ret);
 		else return $ret;
 	}
 	
