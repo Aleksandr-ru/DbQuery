@@ -2,11 +2,12 @@
 /**
  * Класс работы с SQLite
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 1.1
+ * @version 1.2
  * 
  * информация о версиях
  * 1.0 
  * 1.1 добавлены output callback и fetch mode
+ * 1.2 парсинг IN(?) и разбор массивов для IN
  */
 class SQLiteQuery extends SQLite3
 {
@@ -76,6 +77,38 @@ class SQLiteQuery extends SQLite3
 		$this->fetch_mode = $mode;
 		return TRUE;
 	}
+
+	/**
+	 * парсит SQL запрос на предмет вхождения IN(?) и заменяет '?' на нужное количество в зависимости от значений bind параметров
+	 * также преобразовывает массивы в значениях bind параметров в дополнительные элементы
+	 * @param string $sql запрос
+	 * @param array $args bind параметры
+	 * @return boolean были или нет замены в запросе/параметрах
+	 * @throws BadMethodCallException когда размер $args меньше чем требуется SQL запросу
+	 */
+	protected static function parseSqlIn(&$sql, &$args)
+	{
+		if(!preg_match("/IN\s*\(\s*\?\s*\)/i", $sql)) return FALSE;
+		$cnt = -1;
+		$sql = preg_replace_callback("/((?P<in>IN)\s*\(\s*\?\s*\))|(\W\?)/i", function ($matches) use(&$args, &$cnt, $sql) {
+			$cnt++;
+			if(!array_key_exists($cnt, $args)) {
+				throw new BadMethodCallException("Too less arguments for query [$sql]");
+			}
+			if($matches['in'] && is_array($args[$cnt])) {
+				$size = sizeof($args[$cnt]);
+				if($size > 1) {
+					array_splice($args, $cnt, 1, $args[$cnt]);
+					$cnt += $size-1;
+					return 'IN(' . rtrim(str_repeat('?,', $size), ',') . ')';
+				}
+				elseif($size == 1) $args[$cnt] = array_shift($args[$cnt]);
+				else $args[$cnt] = NULL;
+			}
+			return $matches[0];
+		}, $sql);
+		return TRUE;
+	}
 	
 	/**
 	* подготовить statement с биндом переменных (для внутренних целей)
@@ -84,27 +117,28 @@ class SQLiteQuery extends SQLite3
 	* @param mixed $...   ...
 	* @param mixed $bindN переменная для N bind
 	* 
-	* @return SQLite3Stmt 	
+	* @return SQLite3Stmt
+	* @throws BadMethodCallException когда количество параметров не соответсвует SQL запросу
 	*/
 	protected function stmtWithBind($sql)
 	{
+		$args = array_slice(func_get_args(), 1);
+		self::parseSqlIn($sql, $args);
+
 		// готовим stmt
 		$stmt = $this->prepare($sql);
 		if(!$stmt) {
 			trigger_error("Failed to prepare statement for [$sql]", E_USER_WARNING);
 			return FALSE;
 		}
-		// проверяем количество параметров		
-		if($stmt->paramCount() > func_num_args() - 1) {			
-			//trigger_error("Too less parameters for query [$sql]", E_USER_WARNING);
-			$stmt->close();
-			//return FALSE;
+		// проверяем количество параметров				
+		if($stmt->paramCount() > sizeof($args)) {
+			$stmt->close();			
 			throw new BadMethodCallException("Too less arguments for query [$sql]");
 		}
-		// bind паарметров
-		//for($i = 1; $i < func_num_args(); $i++) {
-		for($i = 1; $i <= $stmt->paramCount(); $i++) {
-			$arg = func_get_arg($i);
+		// bind паарметров		
+		for($i = 1; $i <= $stmt->paramCount(); $i++) {			
+			$arg = $args[$i-1];
 			if(!$stmt->bindValue($i, $arg, $this->getArgType($arg))) {
 				trigger_error("Failed to bind paremeter $i to [$sql]", E_USER_WARNING);
 				return FALSE;
