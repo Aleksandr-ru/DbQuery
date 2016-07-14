@@ -21,6 +21,6 @@ $arr = $DB->queryColumn($sql, $min_id, $max_id); // all rows, first column (or f
 
 **MySQL** via mysqli
 
-**SQLte** via sqlite3
+**SQLite** via sqlite3
 
 **Oracle** via oci8 (testing stage)
