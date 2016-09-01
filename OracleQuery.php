@@ -46,7 +46,7 @@ class OracleQuery
 		$this->e = oci_error();
 		
 		if(!$this->conn) {
-			throw new Exception($this->e['message'], $this->e['code']);			
+			throw new Exception($this->e['message'] ? $this->e['message'] : 'Unknown error', $this->e['code'] ? $this->e['code'] : -1);
 		}
 		elseif($this->e['code']) {
 			trigger_error("Connection was successful, but {$this->e['message']}", E_USER_WARNING);
