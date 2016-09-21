@@ -89,11 +89,12 @@ class SQLiteQuery extends SQLite3
 	protected static function parseSqlIn(&$sql, &$args)
 	{
 		if(!preg_match("/IN\s*\(\s*\?\s*\)/i", $sql)) return FALSE;
+		$sql_orig = $sql;
 		$cnt = -1;
-		$sql = preg_replace_callback("/((?P<in>IN)\s*\(\s*\?\s*\))|(\W\?)/i", function ($matches) use(&$args, &$cnt, $sql) {
+		$sql = preg_replace_callback("/((?P<in>IN)\s*\(\s*\?\s*\))|(\W\?)/i", function ($matches) use(&$args, &$cnt, $sql_orig) {
 			$cnt++;
 			if(!array_key_exists($cnt, $args)) {
-				throw new BadMethodCallException("Too less arguments for query [$sql]");
+				throw new BadMethodCallException("Too less arguments for query [$sql_orig]");
 			}
 			if($matches['in'] && is_array($args[$cnt])) {
 				$size = sizeof($args[$cnt]);
