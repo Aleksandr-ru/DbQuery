@@ -12,9 +12,10 @@ class PostgresQuery
 	protected $conn;
 	protected $affected_rows = 0;
     
-	function __construct($host = 'localhost', $port = 5432, $dbname = '', $user = '', $password = '')
+	function __construct($host = 'localhost:5432', $dbname = '', $user = '', $password = '')
 	{
 		$conn_string = array();
+		@list($host, $port) = explode(':', $host);
 		if($host) $conn_string[] = "host=$host";
 		if($port) $conn_string[] = "port=$port";
 		if($dbname) $conn_string[] = "dbname=$dbname";
