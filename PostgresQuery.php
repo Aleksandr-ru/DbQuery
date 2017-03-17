@@ -2,7 +2,7 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.1 beta
+ * @version 0.2 beta
  *
  * информация о версиях
  * 1.0
@@ -39,10 +39,67 @@ class PostgresQuery
 	{
 		return pg_last_error($this->conn);
 	}
+	
+	/**
+	 * парсит SQL запрос на предмет вхождения IN($1) и заменяет '$1' на нужное количество в зависимости от значений bind параметров
+	 * также преобразовывает массивы в значениях bind параметров в дополнительные элементы
+	 * @param string $sql запрос
+	 * @param array $args bind параметры
+	 * @return boolean были или нет замены в запросе/параметрах
+	 * @throws BadMethodCallException когда размер $args меньше чем требуется SQL запросу
+	 */
+	protected static function parseSqlIn(&$sql, &$args)
+	{
+		if(!preg_match("/IN\s*\(\s*\\$\d+\s*\)/i", $sql)) return FALSE;
+		$sql_orig = $sql;
+		$cnt = -1;
+		$sql = preg_replace_callback("/((?P<in>IN)\s*\(\s*(?P<s>\\$\d+)\s*\))|(\W\\$\d+)/i", function ($matches) use(&$args, &$cnt, $sql_orig) {
+			$cnt++;
+			if(!array_key_exists($cnt, $args)) throw new BadMethodCallException("Too less arguments for query [$sql_orig]");
+			if($matches['in'] && is_array($args[$cnt])) {
+				$size = count($args[$cnt]);
+				if($size > 1) {
+					$in = 'IN(' . $matches['s'];
+					for($i=1; $i<$size; $i++) {
+						$ii = count($args) + 1;
+						$args[] = $args[$cnt][$i];
+						$in .= ', $' . $ii;
+					}
+					$args[$cnt] = array_shift($args[$cnt]);
+					$in .= ')';
+					return $in;
+				}
+				elseif($size == 1) $args[$cnt] = array_shift($args[$cnt]);
+				else $args[$cnt] = NULL;
+			}
+			return $matches[0];
+		}, $sql);
+		return ($cnt >= 0);
+	}
+
+	/**
+	 * парсит SQL запрос заменяя ? на $1
+	 * @param string $sql запрос
+	 * @param array $args bind параметры
+	 * @return boolean были или нет замены в запросе/параметрах
+	 * @throws BadMethodCallException когда размер $args меньше чем требуется SQL запросу
+	 */
+	protected static function parseSql(&$sql, &$args)
+	{
+		$sql_orig = $sql;
+		$cnt = 0;
+		$sql = preg_replace_callback("/\W\?/", function ($matches) use(&$cnt) {
+			return substr($matches[0], 0, -1) . '$' . ++$cnt;
+		}, $sql);
+		if(count($args) != $cnt) {
+			throw new BadMethodCallException("Too less arguments for query [$sql_orig]");
+		}
+		return self::parseSqlIn($sql, $args);
+	}
 
 	/**
 	 * выполнить запрос не возвращающий данных
-	 * @param string $sql запрос вида 'insert into t (col1, col2) VALUES($1, $2)'
+	 * @param string $sql запрос вида 'insert into t (col1, col2) VALUES(?, ?)'
 	 * @param mixed $bind1 переменная для первого bind
 	 * @param mixed $...   ...
 	 * @param mixed $bindN переменная для N bind
@@ -52,7 +109,7 @@ class PostgresQuery
 	function execQuery($sql)
 	{
 		$args = array_slice(func_get_args(), 1);
-		self::parseSqlIn($sql, $args);
+		self::parseSql($sql, $args);
 		
 		if($result = pg_query_params($this->conn, $sql, $args)) {
 			$this->affected_rows = pg_affected_rows($result);			
@@ -62,7 +119,7 @@ class PostgresQuery
 	}
 
 	/**
-	 * begin
+	 * BEGIN
 	 * @return bool
 	 */
 	function beginTransaction()
@@ -71,7 +128,7 @@ class PostgresQuery
 	}
 
 	/**
-	 * commit
+	 * COMMIT
 	 * @return bool
 	 */
 	function commitTransaction()
@@ -80,7 +137,7 @@ class PostgresQuery
 	}
 
 	/**
-	 * rollback
+	 * ROLLBACK
 	 * @return bool
 	 */
 	function rollbackTransaction()
@@ -90,7 +147,7 @@ class PostgresQuery
 
 	/**
 	 * получить результат выполнения запроса в массив
-	 * @param string $sql запрос вида SELECT * FROM t WHERE a = $1 AND b = $2
+	 * @param string $sql запрос вида SELECT * FROM t WHERE a = ? AND b = ?
 	 * @param mixed $bind1 переменная для первого bind
 	 * @param mixed $...   ...
 	 * @param mixed $bindN переменная для N bind
@@ -100,7 +157,7 @@ class PostgresQuery
 	function queryArray($sql)
 	{
 		$args = array_slice(func_get_args(), 1);
-		self::parseSqlIn($sql, $args);
+		self::parseSql($sql, $args);
 
 		if($result = pg_query_params($this->conn, $sql, $args)) {
 			$data = pg_fetch_all($result);
@@ -154,42 +211,5 @@ class PostgresQuery
 		}
 		else return $a;
 		return $ret;
-	}
-
-	/**
-	 * парсит SQL запрос на предмет вхождения IN($1) и заменяет '$1' на нужное количество в зависимости от значений bind параметров
-	 * также преобразовывает массивы в значениях bind параметров в дополнительные элементы
-	 * @param string $sql запрос
-	 * @param array $args bind параметры
-	 * @return boolean были или нет замены в запросе/параметрах
-	 * @throws BadMethodCallException когда размер $args меньше чем требуется SQL запросу
-	 */
-	protected static function parseSqlIn(&$sql, &$args)
-	{
-		if(!preg_match("/IN\s*\(\s*\\$\d+\s*\)/i", $sql)) return FALSE;
-		$sql_orig = $sql;
-		$cnt = -1;
-		$sql = preg_replace_callback("/((?P<in>IN)\s*\(\s*(?P<s>\\$\d+)\s*\))|(\W\\$\d+)/i", function ($matches) use(&$args, &$cnt, $sql_orig) {
-			$cnt++;
-			if(!array_key_exists($cnt, $args)) throw new BadMethodCallException("Too less arguments for query [$sql_orig]");
-			if($matches['in'] && is_array($args[$cnt])) {
-				$size = count($args[$cnt]);
-				if($size > 1) {
-					$in = 'IN(' . $matches['s'];
-					for($i=1; $i<$size; $i++) {
-						$ii = count($args) + 1;
-						$args[] = $args[$cnt][$i];
-						$in .= ', $' . $ii;
-					}
-					$args[$cnt] = array_shift($args[$cnt]);
-					$in .= ')';
-					return $in;
-				}
-				elseif($size == 1) $args[$cnt] = array_shift($args[$cnt]);
-				else $args[$cnt] = NULL;
-			}
-			return $matches[0];
-		}, $sql);		
-		return TRUE;
 	}
 }
