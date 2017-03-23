@@ -2,7 +2,7 @@
 /**
  * Класс работы с Oracle
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.3 pre-beta
+ * @version 0.4 pre-beta
  * 
  * В основу положена концепция из ora_query() by alyuro
  * 
@@ -151,7 +151,7 @@ class OracleQuery
 	 * 
 	 * @param resource $stmt
 	 * @param string $var название переменной
-	 * @param string &$arg значение для bind
+	 * @param string $arg значение для bind
 	 * @param string $vartype тип переменной, входная (:) или выходная (&)
 	 * @param string $varclass класс blob или clob или размер для выходной переменной
 	 */
@@ -195,7 +195,66 @@ class OracleQuery
 			return FALSE;
 		}
 	}
-	
+
+	/**
+	 * обрабатывает результат и освобаждает затронутые $this->lob[] и $this->cursor[]
+	 *
+	 * @param string $var название переменной
+	 * @param string $arg значение для bind
+	 * @param string $vartype тип переменной, входная (:) или выходная (&)
+	 * @param string $varclass класс blob или clob или размер для выходной переменной
+	 * @return mixed или FALSE если операция не удалась
+	 */
+	protected function processResult($var, &$arg, $vartype, $varclass)
+	{
+		$ret = NULL;
+		// regular out
+		if ($vartype == self::VARTYPE_OUT && preg_match("/^\d*$/", $varclass)) {
+			return $arg;
+		}
+		// cursor
+		elseif ($vartype == self::VARTYPE_CURSOR) {
+			if(!@oci_execute($this->curs[$var])) {
+				$this->e = oci_error($this->curs[$var]);
+				trigger_error("Cursor '$var' execution error: ".$this->getErrorMes(), E_USER_WARNING);
+				$ret = FALSE;
+			}
+			else oci_fetch_all($this->curs[$var], $ret, 0, -1, OCI_FETCHSTATEMENT_BY_ROW + $this->fetch_mode);
+			oci_free_statement($this->curs[$var]);
+		}
+		// blob and clob in and out
+		elseif ($varclass == self::VARCLASS_BLOB || $varclass == self::VARCLASS_CLOB) {
+			if($vartype == self::VARTYPE_IN) {
+				if(method_exists($this->lob[$var], 'flush')) {
+					$this->lob[$var]->flush(OCI_LOB_BUFFER_FREE);					
+				}
+				else {
+					$this->e = oci_error($this->conn);
+					trigger_error("Method 'flush' does not exists for '$var'. OCI-Lob is '" . print_r($this->lob[$var], TRUE)."'", E_USER_WARNING);
+					$ret = FALSE;
+				}
+			}
+			else { // $vartype == self::VARTYPE_OUT
+				if(is_null($this->lob[$var])) {
+					// Yep! Out Lob can be NULL o_0
+					$ret = NULL;
+				}
+				elseif(method_exists($this->lob[$var], 'load')) {
+					// Lob is not NULL and data can be fetched
+					$ret = $this->lob[$var]->load();
+				}
+				else {
+					$this->e = oci_error($this->conn);
+					trigger_error("Method 'load' does not exists for '$var'. OCI-Lob is '" . print_r($this->lob[$var], TRUE)."'", E_USER_WARNING);
+					$ret = FALSE;
+				}
+			}
+			if($this->lob[$var]) oci_free_descriptor($this->lob[$var]);			
+		}
+		return $ret;
+	}
+
+
 	/**
 	 * выполнить процедуру и вернуть OUT параметры и курсоры в массиве
 	 * @param string $sql запрос вида 'Schema.Package.Procedure(:in_param, &out_param, &[2048]large_out_param, @cursor, :[blob]in_blob, &[blob]out_blob, :[clob]in_clob, &[clob]out_clob);'
@@ -245,50 +304,19 @@ class OracleQuery
 		
 		$ret = array();
 		
-		// process cursors and lobs
+		// process result
 		for($i=0; $i<$paramcount; $i++) {
 			$var = $variables[3][$i];			
 			$vartype = $variables[1][$i];
 			$varclass = $variables[2][$i];
-			
-			// regular out
-			if ($vartype == self::VARTYPE_OUT && preg_match("/^\d*$/", $varclass)) {
-				$ret[$var] = $args[$i];
+			$ret[$var] = $this->processResult($var, $args[$i], $vartype, $varclass);
+			if($ret[$var] === FALSE) {
+				oci_rollback($this->conn);
+				oci_free_statement($stmt);
+				$this->freeLobCurs();
+				trigger_error("Process result failed for query [$sql]", E_USER_WARNING);
+				return FALSE;
 			}
-			// cursor
-			elseif ($vartype == self::VARTYPE_CURSOR) {
-				if(!@oci_execute($this->curs[$var])) {
-					$this->e = oci_error($this->curs[$var]);
-					trigger_error("Cursor '$var' execution error: ".$this->getErrorMes(), E_USER_WARNING);
-				}	 
-				else oci_fetch_all($this->curs[$var], $ret[$var], 0, -1, OCI_FETCHSTATEMENT_BY_ROW + $this->fetch_mode);
-				oci_free_statement($this->curs[$var]);						
-			}
-			// blob and clob in and out
-			elseif ($varclass == self::VARCLASS_BLOB || $varclass == self::VARCLASS_CLOB) {
-				if($vartype == self::VARTYPE_IN) {
-					if(method_exists($this->lob[$var], 'flush')) {
-						$this->lob[$var]->flush(OCI_LOB_BUFFER_FREE);
-					}
-					else {					
-						trigger_error("Method 'flush' does not exists for '$var'. OCI-Lob is '" . print_r($this->lob[$var], TRUE)."'", E_USER_WARNING);
-					}
-				}
-				else { // $vartype == self::VARTYPE_OUT
-					if(is_null($this->lob[$var])) {
-						// Yep! Out Lob can be NULL o_0
-						$ret[$var] = NULL;
-					}
-					elseif(method_exists($this->lob[$var], 'load')) {
-						// Lob is not NULL and data can be fetched
-						$ret[$var] = $this->lob[$var]->load();
-					}
-					else {					
-						trigger_error("Method 'load' does not exists for '$var'. OCI-Lob is '" . print_r($this->lob[$var], TRUE)."'", E_USER_WARNING);
-					}
-				}
-				if($this->lob[$var]) oci_free_descriptor($this->lob[$var]); 
-			}			
 		}
 		
 		oci_commit($this->conn);
