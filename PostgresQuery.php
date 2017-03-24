@@ -173,7 +173,7 @@ class PostgresQuery
 			$data = pg_fetch_all($result);
 			foreach($data as &$row) foreach($row as $field_name => &$value) {
 				$field_number = pg_field_num($result, $field_name);
-				echo $field_type = pg_field_type($result, $field_number);
+				$field_type = pg_field_type($result, $field_number);
 				if($field_type == 'bool') $value = ($value == 't');
 				elseif(substr($field_type, 0, 3) == 'int') $value = (int)$value;
 				elseif(substr($field_type, 0, 4) == 'json') $value = json_decode($value);
