@@ -2,17 +2,19 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.2 beta
+ * @version 0.3 beta
  *
  * информация о версиях
  * 1.0
  */
 class PostgresQuery
 {
+	const SCHEMA_REGEXP = '/^[a-z]+[a-z0-9_]*$/i';
+
 	protected $conn;
 	protected $affected_rows = 0;
     
-	function __construct($host = 'localhost:5432', $dbname = '', $user = '', $password = '')
+	function __construct($host = 'localhost:5432', $dbname = '', $user = '', $password = '', $schema = '')
 	{
 		$conn_string = array();
 		@list($host, $port) = explode(':', $host);
@@ -29,6 +31,13 @@ class PostgresQuery
 			}
 			$str = implode(' ', $conn_string);
 			throw new Exception("Failed to connect to '$str'");
+		}
+
+		if(preg_match(self::SCHEMA_REGEXP, $schema)) {
+			$this->execQuery("SET SESSION search_path TO $schema;");
+		}
+		elseif($schema) {
+			trigger_error("Bad schema name '$schema' ignored", E_USER_WARNING);
 		}
 	}
 
