@@ -2,7 +2,7 @@
 /**
  * Класс работы с Oracle
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.4 pre-beta
+ * @version 0.5 pre-beta
  * 
  * В основу положена концепция из ora_query() by alyuro
  * 
@@ -310,12 +310,15 @@ class OracleQuery
 			$vartype = $variables[1][$i];
 			$varclass = $variables[2][$i];
 			$ret[$var] = $this->processResult($var, $args[$i], $vartype, $varclass);
-			if($ret[$var] === FALSE) {
+			if(FALSE === $ret[$var]) {
 				oci_rollback($this->conn);
 				oci_free_statement($stmt);
 				$this->freeLobCurs();
 				trigger_error("Process result failed for query [$sql]", E_USER_WARNING);
 				return FALSE;
+			}
+			elseif(NULL === $ret[$var] && self::VARTYPE_OUT != $vartype && self::VARTYPE_CURSOR != $vartype) {
+				unset($ret[$var]);
 			}
 		}
 		
