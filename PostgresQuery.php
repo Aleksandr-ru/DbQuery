@@ -2,7 +2,7 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.4 beta
+ * @version 0.5 beta
  *
  * информация о версиях
  * 1.0
@@ -170,7 +170,7 @@ class PostgresQuery
 		self::parseSql($sql, $args);
 
 		if($result = pg_query_params($this->conn, $sql, $args)) {
-			$data = pg_fetch_all($result);
+			$data = pg_fetch_all($result) or $data = array();
 			foreach($data as &$row) foreach($row as $field_name => &$value) {
 				$field_number = pg_field_num($result, $field_name);
 				$field_type = pg_field_type($result, $field_number);
