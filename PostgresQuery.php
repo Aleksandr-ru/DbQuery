@@ -2,7 +2,7 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.5 beta
+ * @version 0.6 beta
  *
  * информация о версиях
  * 1.0
@@ -171,9 +171,11 @@ class PostgresQuery
 
 		if($result = pg_query_params($this->conn, $sql, $args)) {
 			$data = pg_fetch_all($result) or $data = array();
+			$field_types = array();
+			$field_number = 0;
 			foreach($data as &$row) foreach($row as $field_name => &$value) {
-				$field_number = pg_field_num($result, $field_name);
-				$field_type = pg_field_type($result, $field_number);
+				if(sizeof($field_types) < sizeof($row)) $field_types[$field_name] = pg_field_type($result, $field_number++);
+				$field_type = $field_types[$field_name];
 				if($field_type == 'bool') $value = ($value == 't');
 				elseif(substr($field_type, 0, 3) == 'int') $value = (int)$value;
 				elseif(substr($field_type, 0, 4) == 'json') $value = json_decode($value);
