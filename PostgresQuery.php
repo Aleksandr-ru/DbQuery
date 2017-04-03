@@ -102,7 +102,7 @@ class PostgresQuery
 			return substr($matches[0], 0, -1) . '$' . ++$cnt;
 		}, $sql);
 		if(count($args) != $cnt) {
-			throw new BadMethodCallException("Too less arguments for query [$sql_orig]");
+			throw new BadMethodCallException("Wrong number of arguments for query [$sql_orig]");
 		}
 		return self::parseSqlIn($sql, $args);
 	}
