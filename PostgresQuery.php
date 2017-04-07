@@ -2,7 +2,7 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.6 beta
+ * @version 0.7 beta
  *
  * информация о версиях
  * 1.0
@@ -122,7 +122,7 @@ class PostgresQuery
 		self::parseSql($sql, $args);
 		
 		if($result = pg_query_params($this->conn, $sql, $args)) {
-			$this->affected_rows = pg_affected_rows($result);			
+			$this->affected_rows = pg_affected_rows($result);		
 			return TRUE;
 		}
 		else return FALSE;
@@ -170,6 +170,7 @@ class PostgresQuery
 		self::parseSql($sql, $args);
 
 		if($result = pg_query_params($this->conn, $sql, $args)) {
+			$this->affected_rows = pg_affected_rows($result);
 			$data = pg_fetch_all($result) or $data = array();
 			$field_types = array();
 			$field_number = 0;
@@ -224,5 +225,14 @@ class PostgresQuery
 		}
 		else return $a;
 		return $ret;
+	}
+
+	/**
+	 * Возвращает количество кортежей (сущностей/записей/рядов) затронутых последним запросом
+	 * @return int
+	 */
+	function getAffectedRows()
+	{
+		return $this->affected_rows;
 	}
 }
