@@ -2,7 +2,7 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.7 beta
+ * @version 0.8 beta
  *
  * информация о версиях
  * 1.0
@@ -88,7 +88,9 @@ class PostgresQuery
 	}
 
 	/**
-	 * парсит SQL запрос заменяя ? на $1
+	 * парсит SQL запрос заменяя ? на $1,
+	 * приводит булевские типы к 0 или 1,
+	 * объекты к json-строкам
 	 * @param string $sql запрос
 	 * @param array $args bind параметры
 	 * @return boolean были или нет замены в запросе/параметрах
@@ -103,6 +105,10 @@ class PostgresQuery
 		}, $sql);
 		if(count($args) != $cnt) {
 			throw new BadMethodCallException("Wrong number of arguments for query [$sql_orig]");
+		}
+		foreach($args as &$a) {
+			if(is_bool($a)) $a = $a ? 1 : 0;
+			elseif(is_object($a)) $a = json_encode($a);
 		}
 		return self::parseSqlIn($sql, $args);
 	}
