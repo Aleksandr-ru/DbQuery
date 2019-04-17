@@ -108,6 +108,7 @@ class PostgresQuery
 		}
 		foreach($args as &$a) {
 			if(is_bool($a)) $a = $a ? 1 : 0;
+	                elseif (is_array($a)) $a = sprintf('{%s}', join(',', $a));
 			elseif(is_object($a)) $a = json_encode($a);
 		}
 		return self::parseSqlIn($sql, $args);
