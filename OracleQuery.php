@@ -2,7 +2,7 @@
 /**
  * Класс работы с Oracle
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.5 pre-beta
+ * @version 1.0
  * 
  * В основу положена концепция из ora_query() by alyuro
  * 
