@@ -2,7 +2,7 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 0.9 beta
+ * @version 1.0
  *
  * информация о версиях
  * 1.0
@@ -133,6 +133,21 @@ class PostgresQuery
 		}
 		else return FALSE;
 	}
+
+    /**
+     * Выполнить множество запросов без параметров
+     * @see https://www.php.net/manual/en/function.pg-query.php#example-2613
+     * @param string $sql
+     * @return bool
+     */
+    function execMultipleQuery($sql)
+    {
+        if ($result = pg_query($this->conn, $sql)) {
+            $this->affected_rows = pg_affected_rows($result);
+            return TRUE;
+        }
+        else return FALSE;
+    }
 
 	/**
 	 * BEGIN
