@@ -2,10 +2,11 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 1.0
+ * @version 1.1
  *
  * информация о версиях
  * 1.0
+ * 1.1 Добавлены вложенные транзакции
  */
 class PostgresQuery
 {
@@ -13,7 +14,8 @@ class PostgresQuery
 
 	protected $conn;
 	protected $affected_rows = 0;
-    private $level = 0;
+	protected $transaction = false;
+    protected $level = 0;
 
 	function __construct($host = 'localhost:5432', $dbname = '', $user = '', $password = '', $schema = '')
 	{
@@ -42,7 +44,16 @@ class PostgresQuery
 		}
 	}
 
-	/**
+	function __destruct()
+    {
+        if ($this->conn && $this->transaction) {
+            // если есть незавершенная транзакция
+            //TODO: поведение по-умолчанию rollback или сommit ?
+            $this->execQuery('rollback');
+        }
+    }
+
+    /**
 	 * получить последнее сообщение об ошибке
 	 * @return string
 	 */
@@ -157,7 +168,8 @@ class PostgresQuery
 	function beginTransaction()
 	{
 		if ($this->level === 0) {
-			$this->execQuery('begin');
+		    $this->transaction = true;
+		    $this->execQuery('begin');
 		}
 		$this->level++;
 		return $this->execQuery(sprintf("SAVEPOINT level_%s", $this->level));
@@ -172,6 +184,7 @@ class PostgresQuery
 		$this->execQuery(sprintf("RELEASE SAVEPOINT level_%s", $this->level));
         $this->level--;
         if ($this->level === 0) {
+            $this->transaction = false;
             return $this->execQuery('commit');
         }
 
@@ -187,6 +200,7 @@ class PostgresQuery
 		$result = $this->execQuery(sprintf("ROLLBACK TO SAVEPOINT level_%s", $this->level));
         $this->level--;
         if ($this->level === 0) {
+            $this->transaction = false;
             return $this->execQuery('rollback');
         }
 
