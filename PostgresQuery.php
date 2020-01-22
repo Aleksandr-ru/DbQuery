@@ -13,7 +13,8 @@ class PostgresQuery
 
 	protected $conn;
 	protected $affected_rows = 0;
-    
+    private $level = 0;
+
 	function __construct($host = 'localhost:5432', $dbname = '', $user = '', $password = '', $schema = '')
 	{
 		$conn_string = array();
@@ -155,7 +156,11 @@ class PostgresQuery
 	 */
 	function beginTransaction()
 	{
-		return $this->execQuery('begin');
+		if ($this->level === 0) {
+			$this->execQuery('begin');
+		}
+		$this->level++;
+		return $this->execQuery(sprintf("SAVEPOINT level_%s", $this->level));
 	}
 
 	/**
@@ -164,7 +169,13 @@ class PostgresQuery
 	 */
 	function commitTransaction()
 	{
-		return $this->execQuery('commit');
+		$this->execQuery(sprintf("RELEASE SAVEPOINT level_%s", $this->level));
+        $this->level--;
+        if ($this->level === 0) {
+            return $this->execQuery('commit');
+        }
+
+        return true;
 	}
 
 	/**
@@ -173,7 +184,13 @@ class PostgresQuery
 	 */
 	function rollbackTransaction()
 	{
-		return $this->execQuery('rollback');
+		$result = $this->execQuery(sprintf("ROLLBACK TO SAVEPOINT level_%s", $this->level));
+        $this->level--;
+        if ($this->level === 0) {
+            return $this->execQuery('rollback');
+        }
+
+        return $result;
 	}
 
 	/**
