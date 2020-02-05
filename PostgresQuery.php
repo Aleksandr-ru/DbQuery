@@ -2,11 +2,12 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 1.1
+ * @version 1.2
  *
  * информация о версиях
  * 1.0
  * 1.1 Добавлены вложенные транзакции
+ * 1.2 Добавлена поддержка массивов
  */
 class PostgresQuery
 {
@@ -125,8 +126,120 @@ class PostgresQuery
 		return self::parseSqlIn($sql, $args);
 	}
 
+    /**
+     * Приводит тип Postgres к типу PHP
+     * поддерживает массивы (рекурсивно)
+     * @param string $value
+     * @param string $field_type тип поля из pgsql
+     * @return mixed
+     */
+    protected static function value2type($value, $field_type)
+    {
+        if(is_array($value)) {
+            foreach ($value as $k => &$v) $value[$k] = self::value2type($v, $field_type);
+            return $value;
+        }
+        elseif(empty($value)) return null;
+        elseif($field_type == 'bool') return ($value == 't');
+        elseif(substr($field_type, 0, 3) == 'int') return (int)$value;
+        elseif(substr($field_type, 0, 4) == 'json') return json_decode($value);
+        else return $value;
+    }
+
+    /**
+     * Конвертирует массив pgsql в массив php
+     * @param string $s
+     * @param int $start
+     * @param null $end
+     * @return array|null
+     * @see https://stackoverflow.com/questions/3068683/convert-postgresql-array-to-php-array
+     */
+    protected static function pg_array_parse($s, $start = 0, &$end = null)
+    {
+        if (empty($s) || $s[0] != '{') return null;
+        $return = array();
+        $string = false;
+        $quote = '';
+        $len = strlen($s);
+        $v = '';
+        for ($i = $start + 1; $i < $len; $i++) {
+            $ch = $s[$i];
+
+            if (!$string && $ch == '}') {
+                if ($v !== '' || !empty($return)) {
+                    $return[] = $v;
+                }
+                $end = $i;
+                break;
+            }
+            elseif (!$string && $ch == '{') {
+                $v = self::pg_array_parse($s, $i, $i);
+            }
+            elseif (!$string && $ch == ','){
+                $return[] = $v;
+                $v = '';
+            }
+            elseif (!$string && ($ch == '"' || $ch == "'")) {
+                $string = true;
+                $quote = $ch;
+            }
+            elseif ($string && $ch == $quote && $s[$i - 1] == "\\") {
+                $v = substr($v, 0, -1) . $ch;
+            }
+            elseif ($string && $ch == $quote && $s[$i - 1] != "\\") {
+                $string = false;
+            }
+            else {
+                $v .= $ch;
+            }
+        }
+
+        return $return;
+    }
+
+    /**
+     * Приводит массив php к строке-массиву pgsql
+     * @param array $set
+     * @return string
+     * @see https://stackoverflow.com/questions/5631387/php-array-to-postgres-array
+     */
+    protected function to_pg_array($set)
+    {
+        $result = array();
+        foreach ($set as $t) {
+            if (is_array($t)) {
+                $result[] = $this->to_pg_array($t);
+            }
+            else {
+                //$t = str_replace('"', '\\"', $t); // escape double quote
+                if (!is_numeric($t)) { // quote only non-numeric values
+                    //$t = '"' . $t . '"';
+                    $t = '"' . pg_escape_string($this->conn, $t) . '"';
+                }
+                $result[] = $t;
+            }
+        }
+        return '{' . implode(",", $result) . '}'; // format
+    }
+
+    /**
+     * Заменяет массивы на массивы pgsql
+     * @param string $sql не используется
+     * @param array $args
+     */
+    protected function parseSqlArrays(&$sql, &$args)
+    {
+        foreach ($args as $k => &$arg) {
+            if (is_array($arg)) {
+                $arg = $this->to_pg_array($arg);
+            }
+        }
+    }
+
 	/**
-	 * выполнить запрос не возвращающий данных
+	 * Выполнить запрос не возвращающий данных
+     * Для параметров IN(?) можно использовать массивы (конвертируется в IN($1, $2, ...) имеет ограничение на количство)
+     * Для других параметров так же можно использовать маасивы, конвертируются в массивы pgsql
 	 * @param string $sql запрос вида 'insert into t (col1, col2) VALUES(?, ?)'
 	 * @param mixed $bind1 переменная для первого bind
 	 * @param mixed $...   ...
@@ -138,6 +251,7 @@ class PostgresQuery
 	{
 		$args = array_slice(func_get_args(), 1);
 		self::parseSql($sql, $args);
+		$this->parseSqlArrays($sql, $args);
 		
 		if($result = pg_query_params($this->conn, $sql, $args)) {
 			$this->affected_rows = pg_affected_rows($result);		
@@ -208,7 +322,12 @@ class PostgresQuery
 	}
 
 	/**
-	 * получить результат выполнения запроса в массив
+	 * Получить результат выполнения запроса в массив
+     * Для параметров IN(?) можно использовать массивы (конвертируется в IN($1, $2, ...) имеет ограничение на количство)
+     * Для других параметров так же можно использовать маасивы, конвертируются в массивы pgsql
+     * Выходные значения приводятся к типу в соответствии с типом данных столбца
+     * Если столбец типа массив, то значения также конвертирутся в массив в приведением типа,
+     * но рекомендуется использовтаь встроенную функцию БД array_to_json(pg_array_result)
 	 * @param string $sql запрос вида SELECT * FROM t WHERE a = ? AND b = ?
 	 * @param mixed $bind1 переменная для первого bind
 	 * @param mixed $...   ...
@@ -220,6 +339,7 @@ class PostgresQuery
 	{
 		$args = array_slice(func_get_args(), 1);
 		self::parseSql($sql, $args);
+        $this->parseSqlArrays($sql, $args);
 
 		if($result = pg_query_params($this->conn, $sql, $args)) {
 			$this->affected_rows = pg_affected_rows($result);
@@ -232,9 +352,13 @@ class PostgresQuery
 				}
 				$field_type = $field_types[$field_name];
 				if(!is_null($value)) {
-					if($field_type == 'bool') $value = ($value == 't');
-					elseif(substr($field_type, 0, 3) == 'int') $value = (int)$value;
-					elseif(substr($field_type, 0, 4) == 'json') $value = json_decode($value);
+					if(substr($field_type, 0, 1) == '_') {
+					    $value = self::pg_array_parse($value);
+                        $value = self::value2type($value, substr($field_type, 1));
+                    }
+					else {
+                        $value = self::value2type($value, $field_type);
+                    }
 				}
 			}
 			return $data;
@@ -243,7 +367,7 @@ class PostgresQuery
 	}
 
 	/**
-	 * получить первую строку из резултатов запроса
+	 * Получить первую строку из резултатов запроса
 	 * @see queryArray
 	 */
 	function queryRow($sql)
@@ -254,7 +378,7 @@ class PostgresQuery
 	}
 
 	/**
-	 * получить первое значение из первого ряда результатов зпроса
+	 * Получить первое значение из первого ряда результатов зпроса
 	 * @see queryRow
 	 * @see queryArray
 	 */
@@ -266,8 +390,8 @@ class PostgresQuery
 	}
 
 	/**
-	 * получить первую полонку из результатов запроса
-	 * если в результате более одной колонки, то возвращается массив(col1 => col2, ...)
+	 * Получить первую полонку из результатов запроса
+	 * Если в результате более одной колонки, то возвращается массив(col1 => col2, ...)
 	 * @see queryArray
 	 */
 	function queryColumn($sql)
