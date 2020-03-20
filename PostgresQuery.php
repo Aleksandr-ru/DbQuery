@@ -139,7 +139,7 @@ class PostgresQuery
             foreach ($value as $k => &$v) $value[$k] = self::value2type($v, $field_type);
             return $value;
         }
-        elseif(empty($value)) return null;
+        elseif(is_null($value)) return null;
         elseif($field_type == 'bool') return ($value == 't');
         elseif(substr($field_type, 0, 3) == 'int') return (int)$value;
         elseif(substr($field_type, 0, 4) == 'json') return json_decode($value);
