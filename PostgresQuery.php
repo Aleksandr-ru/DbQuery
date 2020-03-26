@@ -129,7 +129,7 @@ class PostgresQuery
     /**
      * Приводит тип Postgres к типу PHP
      * поддерживает массивы (рекурсивно)
-     * @param string $value
+     * @param string|array $value
      * @param string $field_type тип поля из pgsql
      * @return mixed
      */
@@ -148,13 +148,15 @@ class PostgresQuery
 
     /**
      * Конвертирует массив pgsql в массив php
+     * Публичная на случай когда pg_field_type не отдает признак массива "_" вначале
+     * и приходится конвертировать строку в массив снаружи
      * @param string $s
      * @param int $start
      * @param null $end
      * @return array|null
      * @see https://stackoverflow.com/questions/3068683/convert-postgresql-array-to-php-array
      */
-    protected static function pg_array_parse($s, $start = 0, &$end = null)
+    static function pg_array_parse($s, $start = 0, &$end = null)
     {
         if (empty($s) || $s[0] != '{') return null;
         $return = array();
