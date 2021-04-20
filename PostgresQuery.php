@@ -2,12 +2,13 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 1.2
+ * @version 1.3
  *
  * информация о версиях
  * 1.0
  * 1.1 Добавлены вложенные транзакции
  * 1.2 Добавлена поддержка массивов
+ * 1.3 Добавлена поддержка массива объектов JSON
  */
 class PostgresQuery
 {
@@ -119,10 +120,6 @@ class PostgresQuery
 		if(count($args) != $cnt) {
 			throw new BadMethodCallException("Wrong number of arguments for query [$sql_orig]");
 		}
-		foreach($args as &$a) {
-			if(is_bool($a)) $a = $a ? 1 : 0;
-			elseif(is_object($a)) $a = json_encode($a);
-		}
 		return self::parseSqlIn($sql, $args);
 	}
 
@@ -199,6 +196,28 @@ class PostgresQuery
         return $return;
     }
 
+	/**
+	 * Рекурсивно проверяет, что массив содержит только скалярные значения
+	 * @param $arr
+	 * @return bool
+	 */
+	static function is_scalar_array($arr)
+	{
+		if (!is_array($arr)) {
+			return false;
+		}
+		foreach ($arr as &$value) {
+			if (is_array($value)) {
+				$ret = self::is_scalar_array($value);
+				if (!$ret) return false;
+			}
+			elseif (!is_scalar($value)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
     /**
      * Приводит массив php к строке-массиву pgsql
      * @param array $set
@@ -225,16 +244,29 @@ class PostgresQuery
     }
 
     /**
-     * Заменяет массивы на массивы pgsql
+     * Преобразование параметров для корректного использования в запросе
      * @param string $sql не используется
      * @param array $args
      */
-    protected function parseSqlArrays(&$sql, &$args)
+    protected function castSqlParams(&$sql, &$args)
     {
-        foreach ($args as $k => &$arg) {
-            if (is_array($arg)) {
+        foreach ($args as &$arg) {
+			if (is_bool($arg)) {
+				// логический тип всегда приводим к 0 или 1
+				$arg = $arg ? 1 : 0;
+			}
+			elseif (is_object($arg)) {
+				// объекты считаем json
+				$arg = json_encode($arg);
+			}
+            elseif (static::is_scalar_array($arg)) {
+				// массив простых типов - в массив pgsql
                 $arg = $this->to_pg_array($arg);
             }
+			elseif (is_array($arg)) {
+				// массив объектов - в json
+				$arg = json_encode($arg);
+			}
         }
     }
 
@@ -253,7 +285,7 @@ class PostgresQuery
 	{
 		$args = array_slice(func_get_args(), 1);
 		self::parseSql($sql, $args);
-		$this->parseSqlArrays($sql, $args);
+		$this->castSqlParams($sql, $args);
 		
 		if($result = pg_query_params($this->conn, $sql, $args)) {
 			$this->affected_rows = pg_affected_rows($result);		
@@ -341,7 +373,7 @@ class PostgresQuery
 	{
 		$args = array_slice(func_get_args(), 1);
 		self::parseSql($sql, $args);
-        $this->parseSqlArrays($sql, $args);
+        $this->castSqlParams($sql, $args);
 
 		if($result = pg_query_params($this->conn, $sql, $args)) {
 			$this->affected_rows = pg_affected_rows($result);
