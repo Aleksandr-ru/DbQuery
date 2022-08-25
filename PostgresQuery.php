@@ -2,13 +2,14 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 1.3
+ * @version 1.4
  *
  * информация о версиях
  * 1.0
  * 1.1 Добавлены вложенные транзакции
  * 1.2 Добавлена поддержка массивов
  * 1.3 Добавлена поддержка массива объектов JSON
+ * 1.4 Добавлены исключения при работе с транзакциями
  */
 class PostgresQuery
 {
@@ -51,12 +52,13 @@ class PostgresQuery
         if ($this->conn && $this->transaction) {
             // если есть незавершенная транзакция
             //TODO: поведение по-умолчанию rollback или сommit ?
+            trigger_error('Incomplete transaction: ROLLBACK', E_USER_WARNING);
             $this->execQuery('rollback');
         }
     }
 
     /**
-	 * получить последнее сообщение об ошибке
+	 * Получить последнее сообщение об ошибке
 	 * @return string
 	 */
 	function getError()
@@ -65,7 +67,7 @@ class PostgresQuery
 	}
 	
 	/**
-	 * парсит SQL запрос на предмет вхождения IN($1) и заменяет '$1' на нужное количество в зависимости от значений bind параметров
+	 * Парсит SQL запрос на предмет вхождения IN($1) и заменяет '$1' на нужное количество в зависимости от значений bind параметров
 	 * также преобразовывает массивы в значениях bind параметров в дополнительные элементы
 	 * @param string $sql запрос
 	 * @param array $args bind параметры
@@ -102,7 +104,7 @@ class PostgresQuery
 	}
 
 	/**
-	 * парсит SQL запрос заменяя ? на $1,
+	 * Парсит SQL запрос заменяя ? на $1,
 	 * приводит булевские типы к 0 или 1,
 	 * объекты к json-строкам
 	 * @param string $sql запрос
@@ -145,7 +147,7 @@ class PostgresQuery
 
     /**
      * Конвертирует массив pgsql в массив php
-     * Публичная на случай когда pg_field_type не отдает признак массива "_" вначале
+     * Публичная на случай, когда pg_field_type не отдает признак массива "_" вначале
      * и приходится конвертировать строку в массив снаружи
      * @param string $s
      * @param int $start
@@ -232,9 +234,7 @@ class PostgresQuery
                 $result[] = $this->to_pg_array($t);
             }
             else {
-                //$t = str_replace('"', '\\"', $t); // escape double quote
                 if (!is_numeric($t)) { // quote only non-numeric values
-                    //$t = '"' . $t . '"';
                     $t = '"' . pg_escape_string($this->conn, $t) . '"';
                 }
                 $result[] = $t;
@@ -272,8 +272,8 @@ class PostgresQuery
 
 	/**
 	 * Выполнить запрос не возвращающий данных
-     * Для параметров IN(?) можно использовать массивы (конвертируется в IN($1, $2, ...) имеет ограничение на количство)
-     * Для других параметров так же можно использовать маасивы, конвертируются в массивы pgsql
+     * Для параметров IN(?) можно использовать массивы (конвертируется в IN($1, $2, ...) имеет ограничение на количество)
+     * Для других параметров так же можно использовать массивы, конвертируются в массивы pgsql
 	 * @param string $sql запрос вида 'insert into t (col1, col2) VALUES(?, ?)'
 	 * @param mixed $bind1 переменная для первого bind
 	 * @param mixed $...   ...
@@ -309,6 +309,15 @@ class PostgresQuery
         else return FALSE;
     }
 
+    /**
+     * Начата-ли транзакция
+     * @return bool
+     */
+    function isTransaction()
+    {
+        return $this->transaction;
+    }
+
 	/**
 	 * BEGIN
 	 * @return bool
@@ -320,48 +329,56 @@ class PostgresQuery
 		    $this->execQuery('begin');
 		}
 		$this->level++;
-		return $this->execQuery(sprintf("SAVEPOINT level_%s", $this->level));
+		return $this->execQuery(sprintf('SAVEPOINT level_%d', $this->level));
 	}
 
 	/**
 	 * COMMIT
 	 * @return bool
+     * @throws UnderflowException когда транзакция не была начата
 	 */
 	function commitTransaction()
 	{
-		$this->execQuery(sprintf("RELEASE SAVEPOINT level_%s", $this->level));
+        if (!$this->transaction) {
+            throw new UnderflowException('No transaction in progress for COMMIT');
+        }
+
+        $result = $this->execQuery(sprintf('RELEASE SAVEPOINT level_%d', $this->level));
         $this->level--;
         if ($this->level === 0) {
             $this->transaction = false;
             return $this->execQuery('commit');
         }
-
-        return true;
+        else return $result;
 	}
 
 	/**
 	 * ROLLBACK
 	 * @return bool
+     * @throws UnderflowException когда транзакция не была начата
 	 */
 	function rollbackTransaction()
 	{
-		$result = $this->execQuery(sprintf("ROLLBACK TO SAVEPOINT level_%s", $this->level));
+        if (!$this->transaction) {
+            throw new UnderflowException('No transaction in progress for ROLLBACK');
+        }
+
+		$result = $this->execQuery(sprintf('ROLLBACK TO SAVEPOINT level_%d', $this->level));
         $this->level--;
         if ($this->level === 0) {
             $this->transaction = false;
             return $this->execQuery('rollback');
         }
-
-        return $result;
+        else return $result;
 	}
 
 	/**
 	 * Получить результат выполнения запроса в массив
-     * Для параметров IN(?) можно использовать массивы (конвертируется в IN($1, $2, ...) имеет ограничение на количство)
-     * Для других параметров так же можно использовать маасивы, конвертируются в массивы pgsql
+     * Для параметров IN(?) можно использовать массивы (конвертируется в IN($1, $2, ...) имеет ограничение на количество)
+     * Для других параметров так же можно использовать массивы, конвертируются в массивы pgsql
      * Выходные значения приводятся к типу в соответствии с типом данных столбца
-     * Если столбец типа массив, то значения также конвертирутся в массив в приведением типа,
-     * но рекомендуется использовтаь встроенную функцию БД array_to_json(pg_array_result)
+     * Если столбец типа массив, то значения также конвертируется в массив с приведением типа,
+     * но рекомендуется использовать встроенную функцию БД array_to_json(pg_array_result)
 	 * @param string $sql запрос вида SELECT * FROM t WHERE a = ? AND b = ?
 	 * @param mixed $bind1 переменная для первого bind
 	 * @param mixed $...   ...
@@ -401,7 +418,7 @@ class PostgresQuery
 	}
 
 	/**
-	 * Получить первую строку из резултатов запроса
+	 * Получить первую строку из результатов запроса
 	 * @see queryArray
 	 */
 	function queryRow($sql)
@@ -412,7 +429,7 @@ class PostgresQuery
 	}
 
 	/**
-	 * Получить первое значение из первого ряда результатов зпроса
+	 * Получить первое значение из первого ряда результатов запроса
 	 * @see queryRow
 	 * @see queryArray
 	 */
@@ -424,7 +441,7 @@ class PostgresQuery
 	}
 
 	/**
-	 * Получить первую полонку из результатов запроса
+	 * Получить первую колонку из результатов запроса
 	 * Если в результате более одной колонки, то возвращается массив(col1 => col2, ...)
 	 * @see queryArray
 	 */
