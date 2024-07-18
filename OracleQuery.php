@@ -7,7 +7,7 @@
  * В основу положена концепция из ora_query() by alyuro
  * 
  * информация о версиях
- * 1.0 
+ * 1.0
  */
 class OracleQuery
 {
@@ -25,7 +25,7 @@ class OracleQuery
 	protected $lob, $curs;
 	
 	/**
-	* режим извлечения данных 
+	* Режим извлечения данных
 	* @var $fetch_mode
 	* 
 	*/
@@ -61,7 +61,7 @@ class OracleQuery
 	}
 	
 	/**
-	 * получить последнюю ошибку в виде массива
+	 * Получить последнюю ошибку в виде массива
 	 * @return array('code' => ..., 'message' => ..., 'offset' => ..., 'sqltext' => ...,)
 	 */
 	function getError()
@@ -70,7 +70,7 @@ class OracleQuery
 	}
 	
 	/**
-	 * получить последний код ошибки
+	 * Получить последний код ошибки
 	 * @return int
 	 */
 	function getErrorCode()
@@ -79,7 +79,7 @@ class OracleQuery
 	}
 	
 	/**
-	 * получить последнее сообщение об ошибке
+	 * Получить последнее сообщение об ошибке
 	 * @return string
 	 */
 	function getErrorMes()
@@ -100,7 +100,7 @@ class OracleQuery
 	}
 	
 	/**
-	* получить текущий режим извлечения данных для query*-функций
+	* Получить текущий режим извлечения данных для query*-функций
 	* 
 	* @return
 	*/
@@ -110,7 +110,7 @@ class OracleQuery
 	}
 	
 	/**
-	* устанавлливает режим извлечения данных для query*-функций
+	* Устанавливает режим извлечения данных для query*-функций
 	* @param int $mode новое значение может быть OCI_ASSOC, OCI_NUM
 	* 
 	* @return bool
@@ -122,7 +122,7 @@ class OracleQuery
 	}
 	
 	/**
-	 * разбирает запрос и превращает в подходящий вид для oracle
+	 * Разбирает запрос и превращает в подходящий вид для oracle
 	 * возвращает массив параметров переменных запроса, например
 	 * @param string &$sql запрос вида Schema.Package.Procedure(:in_param, &out_param, &[2048]large_out_param, @cursor, :[blob]in_blob, &[blob]out_blob, :[clob]in_clob, &[clob]out_clob);
 	 * @return Array
@@ -146,7 +146,7 @@ class OracleQuery
 	}
 	
 	/**
-	 * делает bind пеерменной на основе указанных параметров
+	 * Делает bind переменной на основе указанных параметров
 	 * при необходимости создает требуемые $this->lob[] и $this->cursor[]
 	 * 
 	 * @param resource $stmt
@@ -197,7 +197,7 @@ class OracleQuery
 	}
 
 	/**
-	 * обрабатывает результат и освобаждает затронутые $this->lob[] и $this->cursor[]
+	 * Обрабатывает результат и освобождает затронутые $this->lob[] и $this->cursor[]
 	 *
 	 * @param string $var название переменной
 	 * @param string $arg значение для bind
@@ -256,7 +256,7 @@ class OracleQuery
 
 
 	/**
-	 * выполнить процедуру и вернуть OUT параметры и курсоры в массиве
+	 * Выполнить процедуру и вернуть OUT параметры и курсоры в массиве
 	 * @param string $sql запрос вида 'Schema.Package.Procedure(:in_param, &out_param, &[2048]large_out_param, @cursor, :[blob]in_blob, &[blob]out_blob, :[clob]in_clob, &[clob]out_clob);'
 	 * @param mixed $bind1 переменная для первого bind
 	 * @param mixed $...   ...
@@ -328,7 +328,7 @@ class OracleQuery
 	}
 	
 	/**
-	* подготовить statement с биндом переменных (для внутренних целей)
+	* Подготовить statement с биндом переменных (для внутренних целей)
 	* @param string $sql запрос с маркерами для бинда ':name'
 	* @param mixed $bind1 переменная для первого bind
 	* @param mixed $...   ...
@@ -368,7 +368,7 @@ class OracleQuery
 	}
 	
 	/**
-	* выполнить запрос не возвращающий данных
+	* Выполнить запрос не возвращающий данных
 	* @param string $sql запрос вида 'insert into t (col1, col2) VALUES(:bind1, :bind2)'
 	* @param mixed $bind1 переменная для первого bind
 	* @param mixed $...   ...
@@ -395,7 +395,7 @@ class OracleQuery
 	}
 	
 	/**
-	* получить результат выполнения запроса в массив
+	* Получить результат выполнения запроса в массив
 	* @param string $sql запрос вида 'select * from t where a = :bind1 AND b = :bind2'
 	* @param mixed $bind1 переменная для первого bind
 	* @param mixed $...   ...
@@ -426,7 +426,7 @@ class OracleQuery
 	}
 	
 	/**
-	* получить первую строку из резултатов запроса
+	* Получить первую строку из результатов запроса
 	* @see queryArray
 	*/
 	function queryRow($sql)
@@ -437,7 +437,7 @@ class OracleQuery
 	}
 	
 	/**
-	* получить первое значение из первого ряда результатов зпроса
+	* Получить первое значение из первого ряда результатов зпроса
 	* @see queryRow
 	* @see queryArray
 	*/
@@ -449,7 +449,7 @@ class OracleQuery
 	}
 	
 	/**
-	* получить первую полонку из результатов запроса
+	* Получить первую колонку из результатов запроса
 	* если в результате более одной колонки, то возвращается массив(col1 => col2, ...)
 	* @see queryArray
 	*/
