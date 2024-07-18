@@ -2,12 +2,13 @@
 /**
  * Класс работы с Oracle
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 1.0
+ * @version 1.1
  * 
  * В основу положена концепция из ora_query() by alyuro
  * 
  * информация о версиях
  * 1.0
+ * 1.1 возможность установки таймаута выполнения вызовов
  */
 class OracleQuery
 {
@@ -463,6 +464,38 @@ class OracleQuery
 			isset($col2) ? $ret[$col1] = $col2 : $ret[] = $col1;			
 		}
 		else return $a;		
+		return $ret;
+	}
+
+	/**
+	 * Выполнить функцию с таймаутом оракловых вызовов
+	 *
+	 * @notice Для работы требуется:
+	 * - OCI8 Version => 2.2.0
+	 * - Oracle Run-time Client Library Version => 18.0
+	 *
+	 * @param int $timeout миллисекунд
+	 * @param callable $fn функция
+	 * @param array $args аргументы функции
+	 * @return mixed возврат от функции
+	 * @throws Exception перевыбрасывает исключение из функции
+	 */
+	public function withTimeout($timeout, $fn, $args = [])
+	{
+		$exception = null;
+
+		oci_set_call_timeout($this->conn, $timeout);
+		try {
+			$ret = call_user_func_array($fn, $args);
+		}
+		catch (Exception $e) {
+			$exception = $e;
+		}
+		oci_set_call_timeout($this->conn, 0);
+
+		if ($exception) {
+			throw $exception;
+		}
 		return $ret;
 	}
 }
