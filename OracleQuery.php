@@ -2,13 +2,14 @@
 /**
  * Класс работы с Oracle
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 1.1
+ * @version 1.1.1
  * 
  * В основу положена концепция из ora_query() by alyuro
  * 
  * информация о версиях
  * 1.0
- * 1.1 возможность установки таймаута выполнения вызовов
+ * 1.1   возможность установки таймаута выполнения вызовов
+ * 1.1.1 php8 hotfix
  */
 class OracleQuery
 {
@@ -91,11 +92,11 @@ class OracleQuery
 	protected function freeLobCurs()
 	{
 		if(isset($this->lob)) foreach ($this->lob as $key => $value) {
-			@oci_free_descriptor($value);
+			if($value) oci_free_descriptor($value);
 			unset($this->lob[$key]);
 		}
 		if(isset($this->curs)) foreach ($this->curs as $key => $value) {
-			@oci_free_statement($value);
+			if($value) oci_free_statement($value);
 			unset($this->curs[$key]);
 		}
 	}
