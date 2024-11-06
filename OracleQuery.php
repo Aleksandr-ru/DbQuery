@@ -96,7 +96,10 @@ class OracleQuery
 			unset($this->lob[$key]);
 		}
 		if(isset($this->curs)) foreach ($this->curs as $key => $value) {
-			if($value) oci_free_statement($value);
+			if (is_resource($value) && get_resource_type($value) != 'Unknown') {
+				//todo: get_resource_type = "oci8 statement"
+				oci_free_statement($value);
+			}
 			unset($this->curs[$key]);
 		}
 	}
