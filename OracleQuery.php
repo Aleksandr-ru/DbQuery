@@ -92,7 +92,13 @@ class OracleQuery
 	protected function freeLobCurs()
 	{
 		if(isset($this->lob)) foreach ($this->lob as $key => $value) {
-			if($value) oci_free_descriptor($value);
+			if (is_object($value) && property_exists($value, 'descriptor')) {
+				if (is_resource($value->descriptor) && get_resource_type($value->descriptor) != 'Unknown') {
+					//todo: get_resource_type = "oci8 ..."
+					oci_free_descriptor($value);
+				}
+			}
+			elseif($value) oci_free_descriptor($value);
 			unset($this->lob[$key]);
 		}
 		if(isset($this->curs)) foreach ($this->curs as $key => $value) {
