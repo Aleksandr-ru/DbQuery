@@ -2,7 +2,7 @@
 /**
  * Класс работы с PostgreSQL
  * @copyright (c)Rebel http://aleksandr.ru
- * @version 1.4
+ * @version 1.5
  *
  * информация о версиях
  * 1.0
@@ -10,6 +10,7 @@
  * 1.2 Добавлена поддержка массивов
  * 1.3 Добавлена поддержка массива объектов JSON
  * 1.4 Добавлены исключения при работе с транзакциями
+ * 1.5 Типизпция полей без запроса к БД
  */
 class PostgresQuery
 {
@@ -47,6 +48,32 @@ class PostgresQuery
 		}
 	}
 
+	/**
+	 * @var [oid => string, ...] приводимые типы Postgres
+	 * @see https://www.postgresql.org/docs/18/catalog-pg-type.html
+	 * <code>
+	 * SELECT oid, typname FROM pg_type WHERE typtype='b' AND (typcategory IN ('B','N','S') OR typname LIKE '%json%') OR (typcategory='A' AND oid IN (SELECT typarray FROM pg_type WHERE typcategory IN ('B','N','S'))) ORDER BY oid
+	 * </code>
+	 */
+	protected static $pg_field_type_oids = array(
+		16 => 'bool', 1000 => '_bool',
+		18 => 'char', 1002 => '_char',
+		19 => 'name', 1003 => '_name',
+		20 => 'int8', 1016 => '_int8',
+		21 => 'int2', 1005 => '_int2',
+		23 => 'int4', 1007 => '_int4',
+		25 => 'text', 1009 => '_text',
+		26 => 'oid', 1028 => '_oid',
+		114 => 'json', 199 => '_json',
+		700 => 'float4', 1021 => '_float4',
+		701 => 'float8', 1022 => '_float8',
+		790 => 'money', 791 => '_money',
+		1042 => 'bpchar', 1014 => '_bpchar',
+		1043 => 'varchar', 1015 => '_varchar',
+		1700 => 'numeric', 1231 => '_numeric',
+		3802 => 'jsonb', 3807 => '_jsonb',
+	);
+
 	function __destruct()
     {
         if ($this->conn && $this->transaction) {
@@ -66,6 +93,22 @@ class PostgresQuery
 		return pg_last_error($this->conn);
 	}
 	
+	/**
+	 * Быстрая реализация встроенной pg_field_type.
+	 * Вместо запроса к БД использует предопределенный список типов
+	 * @param PgSql\Result $result
+	 * @param int $field
+	 * @return string
+	 * @see https://habr.com/ru/articles/110176/
+	 */
+	protected static function pg_field_type($result, $field)
+	{
+		$oid = pg_field_type_oid($result, $field);
+		if (isset(static::$pg_field_type_oids[$oid]))
+			return static::$pg_field_type_oids[$oid];
+		else return 'unknown';
+	}
+
 	/**
 	 * Парсит SQL запрос на предмет вхождения IN($1) и заменяет '$1' на нужное количество в зависимости от значений bind параметров
 	 * также преобразовывает массивы в значениях bind параметров в дополнительные элементы
@@ -399,7 +442,7 @@ class PostgresQuery
 			$field_number = 0;
 			foreach($data as &$row) foreach($row as $field_name => &$value) {
 				if(sizeof($field_types) < sizeof($row)) {
-					$field_types[$field_name] = pg_field_type($result, $field_number++);
+					$field_types[$field_name] = self::pg_field_type($result, $field_number++);
 				}
 				$field_type = $field_types[$field_name];
 				if(!is_null($value)) {
